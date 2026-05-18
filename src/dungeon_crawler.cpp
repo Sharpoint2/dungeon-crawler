@@ -443,26 +443,34 @@ public:
         clearScreen();
 
         // Title banner centered
-        moveCursor(1, 8);
+        moveCursor(1, 6);
         setColor(Color::BRIGHT_CYAN);
         termPrint( "╔════════════════════════════════════════════════════════════════════════════╗");
+        moveCursor(1, 7);
+        termPrint( "║                                                                            ║");
+        moveCursor(1, 8);
+        termPrint( "║                    DUNGEON CRAWLER - RogueLike Adventure                   ║");
         moveCursor(1, 9);
         termPrint( "║                                                                            ║");
         moveCursor(1, 10);
-        termPrint( "║                    DUNGEON CRAWLER - RogueLike Adventure                   ║");
-        moveCursor(1, 11);
-        termPrint( "║                                                                            ║");
-        moveCursor(1, 12);
         termPrint( "╚════════════════════════════════════════════════════════════════════════════╝");
         resetColor();
 
         // Controls centered
-        moveCursor(35, 18);
+        moveCursor(35, 20);
+        setColor(Color::BRIGHT_WHITE);
         termPrint( "1. New Game");
-        moveCursor(37, 19);
+        moveCursor(37, 22);
         termPrint( "2. Help");
-        moveCursor(37, 20);
+        moveCursor(37, 24);
         termPrint( "3. Quit");
+        resetColor();
+
+        // Bottom hint line
+        moveCursor(1, 40);
+        setColor(Color::BRIGHT_BLACK);
+        termPrint( "         Use 1-3 to select, WASD / Arrow keys to move, Space to rest");
+        resetColor();
     }
     
     void showHelp() {
@@ -556,13 +564,16 @@ public:
     void runMenu() {
         ui.showMainMenu();
         refreshScreen();
-        
+
         char key = 0;
         while (key == 0) {
             key = getKeyPress();
-            if (key == 0) sleepMs(50);
+            if (key == 0) {
+                refreshScreen();
+                sleepMs(50);
+            }
         }
-        
+
         if (key == '1') {
             startNewGame();
         } else if (key == '2') {
@@ -571,15 +582,18 @@ public:
             state = State::DEFEAT;
         }
     }
-    
+
     void runHelp() {
         ui.showHelp();
         refreshScreen();
-        
+
         char key = 0;
-        std::cerr << "[DEBUG] In menu loop, waiting for key..." << std::endl; while (key == 0) {
+        while (key == 0) {
             key = getKeyPress();
-            if (key == 0) sleepMs(50);
+            if (key == 0) {
+                refreshScreen();
+                sleepMs(50);
+            }
         }
         state = State::MENU;
     }

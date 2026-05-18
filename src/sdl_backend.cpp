@@ -31,6 +31,7 @@ static SDL_Renderer* renderer = nullptr;
 static SDL_Texture* gameTexture = nullptr;
 static bool initialized = false;
 static bool isFullscreen = false;
+static bool pendingFullscreen = true;
 
 // ANSI color code to RGB mapping
 static void ansiToRGB(int code, uint8_t& r, uint8_t& g, uint8_t& b) {
@@ -140,10 +141,7 @@ bool setupTerminal() {
     screen.resize(SCREEN_ROWS, std::vector<Cell>(SCREEN_COLS, {' ', 37}));
     clearScreen();
     initialized = true;
-
-    // Start in fullscreen by default
-    isFullscreen = true;
-    SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+    pendingFullscreen = true;
 
     return true;
 }
@@ -251,9 +249,18 @@ void termPrintString(const std::string& s) {
 void refreshScreen() {
     if (!renderer || !gameTexture) return;
 
+    // Defer fullscreen switch until window is fully mapped and one frame rendered
+    if (pendingFullscreen && window) {
+        pendingFullscreen = false;
+        isFullscreen = true;
+        SDL_ShowWindow(window);
+        SDL_RaiseWindow(window);
+        SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+    }
+
     // 1. Render to texture at native resolution
     SDL_SetRenderTarget(renderer, gameTexture);
-    SDL_SetRenderDrawColor(renderer, 16, 16, 32, 255);
+    SDL_SetRenderDrawColor(renderer, 0, 25, 60, 255);
     SDL_RenderClear(renderer);
 
     for (int y = 0; y < SCREEN_ROWS; ++y) {
@@ -271,7 +278,7 @@ void refreshScreen() {
     int winW = 0, winH = 0;
     SDL_GetWindowSize(window, &winW, &winH);
 
-    SDL_SetRenderDrawColor(renderer, 16, 16, 32, 255);
+    SDL_SetRenderDrawColor(renderer, 0, 25, 60, 255);
     SDL_RenderClear(renderer);
 
     // Preserve aspect ratio uniformly in both windowed and fullscreen
