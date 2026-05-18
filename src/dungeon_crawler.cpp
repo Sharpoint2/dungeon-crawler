@@ -441,28 +441,28 @@ public:
     
     void showMainMenu() {
         clearScreen();
-        moveCursor(1, 10);
+
+        // Title banner centered
+        moveCursor(1, 8);
         setColor(Color::BRIGHT_CYAN);
         termPrint( "╔════════════════════════════════════════════════════════════════════════════╗");
+        moveCursor(1, 9);
+        termPrint( "║                                                                            ║");
+        moveCursor(1, 10);
+        termPrint( "║                    DUNGEON CRAWLER - RogueLike Adventure                   ║");
         moveCursor(1, 11);
         termPrint( "║                                                                            ║");
         moveCursor(1, 12);
-        termPrint( "║               DUNGEON CRAWLER - RogueLike Adventure                        ║");
-        moveCursor(1, 13);
-        termPrint( "║                                                                            ║");
-        moveCursor(1, 14);
         termPrint( "╚════════════════════════════════════════════════════════════════════════════╝");
         resetColor();
-        
-        moveCursor(30, 16);
+
+        // Controls centered
+        moveCursor(35, 18);
         termPrint( "1. New Game");
-        moveCursor(30, 17);
+        moveCursor(37, 19);
         termPrint( "2. Help");
-        moveCursor(30, 18);
+        moveCursor(37, 20);
         termPrint( "3. Quit");
-        
-        moveCursor(1, 24);
-        termPrint( "Use 1-3 to select, WASD/Arrows to move, Space to rest");
     }
     
     void showHelp() {
@@ -529,7 +529,10 @@ public:
     Game() : state(State::MENU), dungeonLevel(1), amuletFound(false) {}
     
     void run() {
-        setupTerminal();
+        if (!setupTerminal()) {
+            std::cerr << "Failed to initialize display. Make sure you have a display server running." << std::endl;
+            return;
+        }
         clearScreen();
         
         while (state != State::VICTORY && state != State::DEFEAT) {
@@ -574,7 +577,7 @@ public:
         refreshScreen();
         
         char key = 0;
-        while (key == 0) {
+        std::cerr << "[DEBUG] In menu loop, waiting for key..." << std::endl; while (key == 0) {
             key = getKeyPress();
             if (key == 0) sleepMs(50);
         }
@@ -810,7 +813,28 @@ public:
     
     void runEndScreen() {
         clearScreen();
-        
+
+        if (!player) {
+            // Exited from menu without starting a game
+            setColor(Color::BRIGHT_YELLOW);
+            moveCursor(30, 11);
+            termPrint( "╔════════════════════════════╗");
+            moveCursor(30, 12);
+            termPrint( "║   Thanks for playing!      ║");
+            moveCursor(30, 13);
+            termPrint( "╚════════════════════════════╝");
+            resetColor();
+
+            moveCursor(30, 24);
+            termPrint( "Press any key to exit...");
+            refreshScreen();
+
+            while (getKeyPress() == 0) {
+                sleepMs(50);
+            }
+            return;
+        }
+
         if (state == State::VICTORY) {
             setColor(Color::BRIGHT_YELLOW);
             moveCursor(30, 10);
@@ -820,7 +844,7 @@ public:
             moveCursor(30, 12);
             termPrint( "╚════════════════════════════╝");
             resetColor();
-            
+
             moveCursor(25, 14);
             termPrint( "You found the Amulet of Yendor and escaped the dungeon!");
         } else {
@@ -832,18 +856,18 @@ public:
             moveCursor(30, 12);
             termPrint( "╚════════════════════════════╝");
             resetColor();
-            
+
             moveCursor(30, 14);
             termPrint( "You died on level ", dungeonLevel);
         }
-        
+
         moveCursor(25, 20);
         termPrint( "Final Score: ", (player->stats.level * 100 + dungeonLevel * 50));
-        
+
         moveCursor(30, 24);
         termPrint( "Press any key to exit...");
         refreshScreen();
-        
+
         while (getKeyPress() == 0) {
             sleepMs(50);
         }

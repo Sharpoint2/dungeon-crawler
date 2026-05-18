@@ -5,7 +5,7 @@
 
 // SDL2 backend that emulates a terminal screen for the dungeon crawler game.
 
-void setupTerminal();
+bool setupTerminal();
 void restoreTerminal();
 char getKeyPress();
 void setColor(int color);

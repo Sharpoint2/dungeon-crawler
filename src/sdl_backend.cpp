@@ -4,15 +4,17 @@
 #include <vector>
 #include <string>
 #include <cstring>
+#include <iostream>
+#include <algorithm>
 
 // Screen dimensions in characters
 const int SCREEN_COLS = 80;
-const int SCREEN_ROWS = 30;
+const int SCREEN_ROWS = 45;
 const int CHAR_W = 8;
 const int CHAR_H = 8;
-const int SCALE = 2;
-const int WINDOW_W = SCREEN_COLS * CHAR_W * SCALE;
-const int WINDOW_H = SCREEN_ROWS * CHAR_H * SCALE;
+const int BASE_SCALE = 2;
+const int WINDOW_W = SCREEN_COLS * CHAR_W * BASE_SCALE;
+const int WINDOW_H = SCREEN_ROWS * CHAR_H * BASE_SCALE;
 
 struct Cell {
     char ch;
@@ -26,7 +28,9 @@ static int currentColor = 37; // WHITE
 
 static SDL_Window* window = nullptr;
 static SDL_Renderer* renderer = nullptr;
+static SDL_Texture* gameTexture = nullptr;
 static bool initialized = false;
+static bool isFullscreen = false;
 
 // ANSI color code to RGB mapping
 static void ansiToRGB(int code, uint8_t& r, uint8_t& g, uint8_t& b) {
@@ -59,30 +63,25 @@ static void drawChar(char ch, int x, int y, int color) {
     unsigned char uc = static_cast<unsigned char>(ch);
     const unsigned char* font = FONT_8X8[uc];
 
-    int px = x * CHAR_W * SCALE;
-    int py = y * CHAR_H * SCALE;
+    int px = x * CHAR_W;
+    int py = y * CHAR_H;
 
     for (int row = 0; row < CHAR_H; ++row) {
         unsigned char byte = font[row];
         for (int col = 0; col < CHAR_W; ++col) {
             if (byte & (1 << (7 - col))) {
-                SDL_Rect rect = {
-                    px + col * SCALE,
-                    py + row * SCALE,
-                    SCALE,
-                    SCALE
-                };
-                SDL_RenderFillRect(renderer, &rect);
+                SDL_RenderDrawPoint(renderer, px + col, py + row);
             }
         }
     }
 }
 
-void setupTerminal() {
-    if (initialized) return;
+bool setupTerminal() {
+    if (initialized) return true;
 
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-        return;
+        std::cerr << "SDL_Init failed: " << SDL_GetError() << std::endl;
+        return false;
     }
 
     window = SDL_CreateWindow(
@@ -95,8 +94,9 @@ void setupTerminal() {
     );
 
     if (!window) {
+        std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << std::endl;
         SDL_Quit();
-        return;
+        return false;
     }
 
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
@@ -104,13 +104,54 @@ void setupTerminal() {
         renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
     }
 
+    if (!renderer) {
+        std::cerr << "SDL_CreateRenderer failed: " << SDL_GetError() << std::endl;
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        window = nullptr;
+        return false;
+    }
+
+    gameTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, SCREEN_COLS * CHAR_W, SCREEN_ROWS * CHAR_H);
+    if (!gameTexture) {
+        std::cerr << "SDL_CreateTexture failed: " << SDL_GetError() << std::endl;
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        window = nullptr;
+        renderer = nullptr;
+        return false;
+    }
+    SDL_SetTextureScaleMode(gameTexture, SDL_ScaleModeNearest);
+
+    // Set a sensible default window size based on display
+    SDL_DisplayMode dm;
+    if (SDL_GetDesktopDisplayMode(0, &dm) == 0) {
+        int maxScaleW = dm.w / (SCREEN_COLS * CHAR_W);
+        int maxScaleH = dm.h / (SCREEN_ROWS * CHAR_H);
+        int scale = std::min(maxScaleW, maxScaleH);
+        if (scale < 1) scale = 1;
+        if (scale > 4) scale = 4;
+        int defaultScale = std::max(2, scale - 1);
+        SDL_SetWindowSize(window, SCREEN_COLS * CHAR_W * defaultScale, SCREEN_ROWS * CHAR_H * defaultScale);
+        SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+    }
+
     screen.resize(SCREEN_ROWS, std::vector<Cell>(SCREEN_COLS, {' ', 37}));
     clearScreen();
     initialized = true;
+
+    // Start in fullscreen by default
+    isFullscreen = true;
+    SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+
+    return true;
 }
 
 void restoreTerminal() {
     if (!initialized) return;
+    SDL_DestroyTexture(gameTexture);
+    gameTexture = nullptr;
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
@@ -208,9 +249,10 @@ void termPrintString(const std::string& s) {
 }
 
 void refreshScreen() {
-    if (!renderer) return;
+    if (!renderer || !gameTexture) return;
 
-    // Dark background
+    // 1. Render to texture at native resolution
+    SDL_SetRenderTarget(renderer, gameTexture);
     SDL_SetRenderDrawColor(renderer, 16, 16, 32, 255);
     SDL_RenderClear(renderer);
 
@@ -219,13 +261,33 @@ void refreshScreen() {
             const Cell& cell = screen[y][x];
             if (cell.ch != ' ') {
                 drawChar(cell.ch, x, y, cell.fgColor);
-            } else {
-                // For non-space cells with non-default colors, we still draw space
-                // (nothing to draw for space)
             }
         }
     }
 
+    // 2. Render texture to window
+    SDL_SetRenderTarget(renderer, nullptr);
+
+    int winW = 0, winH = 0;
+    SDL_GetWindowSize(window, &winW, &winH);
+
+    SDL_SetRenderDrawColor(renderer, 16, 16, 32, 255);
+    SDL_RenderClear(renderer);
+
+    // Preserve aspect ratio uniformly in both windowed and fullscreen
+    float scaleX = static_cast<float>(winW) / (SCREEN_COLS * CHAR_W);
+    float scaleY = static_cast<float>(winH) / (SCREEN_ROWS * CHAR_H);
+    float renderScale = std::min(scaleX, scaleY);
+    if (renderScale < 1.0f) renderScale = 1.0f;
+
+    int w = static_cast<int>(SCREEN_COLS * CHAR_W * renderScale);
+    int h = static_cast<int>(SCREEN_ROWS * CHAR_H * renderScale);
+    int offsetX = (winW - w) / 2;
+    int offsetY = (winH - h) / 2;
+
+    SDL_Rect dstRect = { offsetX, offsetY, w, h };
+
+    SDL_RenderCopy(renderer, gameTexture, nullptr, &dstRect);
     SDL_RenderPresent(renderer);
 }
 
@@ -239,6 +301,35 @@ char getKeyPress() {
         }
         if (event.type == SDL_KEYDOWN) {
             SDL_Keycode key = event.key.keysym.sym;
+
+            // Zoom levels
+            if (key == SDLK_F1) {
+                SDL_SetWindowSize(window, SCREEN_COLS * CHAR_W * 1, SCREEN_ROWS * CHAR_H * 1);
+                SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+                continue;
+            }
+            if (key == SDLK_F2) {
+                SDL_SetWindowSize(window, SCREEN_COLS * CHAR_W * 2, SCREEN_ROWS * CHAR_H * 2);
+                SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+                continue;
+            }
+            if (key == SDLK_F3) {
+                SDL_SetWindowSize(window, SCREEN_COLS * CHAR_W * 3, SCREEN_ROWS * CHAR_H * 3);
+                SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+                continue;
+            }
+            if (key == SDLK_F4) {
+                SDL_SetWindowSize(window, SCREEN_COLS * CHAR_W * 4, SCREEN_ROWS * CHAR_H * 4);
+                SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+                continue;
+            }
+
+            // Fullscreen toggle
+            if (key == SDLK_F11) {
+                isFullscreen = !isFullscreen;
+                SDL_SetWindowFullscreen(window, isFullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+                continue;
+            }
 
             // Map arrow keys to WASD
             switch (key) {

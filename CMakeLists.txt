@@ -22,15 +22,36 @@ if(NOT SDL2_FOUND)
     message(FATAL_ERROR "SDL2 not found. Install libsdl2-dev or build SDL2 locally.")
 endif()
 
-add_executable(dungeon_crawler
+# Game binary (renamed so launcher can find it)
+add_executable(dungeon_crawler_game
     src/dungeon_crawler.cpp
     src/sdl_backend.cpp
 )
 
-target_include_directories(dungeon_crawler PRIVATE ${SDL2_INCLUDE_DIRS})
-target_link_libraries(dungeon_crawler ${SDL2_LIBRARIES})
+target_include_directories(dungeon_crawler_game PRIVATE ${SDL2_INCLUDE_DIRS})
+target_link_libraries(dungeon_crawler_game ${SDL2_LIBRARIES})
 
 # Set RPATH so the binary finds libSDL2.so at runtime
+set_target_properties(dungeon_crawler_game PROPERTIES
+    BUILD_RPATH "$ORIGIN"
+    INSTALL_RPATH "$ORIGIN"
+)
+
+if(UNIX)
+    target_link_libraries(dungeon_crawler_game pthread dl)
+endif()
+
+if(MSVC)
+    target_compile_options(dungeon_crawler_game PRIVATE /W4)
+else()
+    target_compile_options(dungeon_crawler_game PRIVATE -Wall -Wextra -Wpedantic -O2)
+endif()
+
+# Launcher binary
+add_executable(dungeon_crawler
+    src/launcher.cpp
+)
+
 set_target_properties(dungeon_crawler PROPERTIES
     BUILD_RPATH "$ORIGIN"
     INSTALL_RPATH "$ORIGIN"
@@ -46,5 +67,5 @@ else()
     target_compile_options(dungeon_crawler PRIVATE -Wall -Wextra -Wpedantic -O2)
 endif()
 
-install(TARGETS dungeon_crawler DESTINATION bin)
+install(TARGETS dungeon_crawler_game dungeon_crawler DESTINATION bin)
 install(FILES README.md DESTINATION share/dungeon_crawler)
