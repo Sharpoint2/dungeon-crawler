@@ -36,6 +36,10 @@ From the `build` directory:
 ./dungeon_crawler
 ```
 
+When a terminal emulator is available, `dungeon_crawler` opens the game in a new window and then exits. If no compatible terminal emulator is installed, it falls back to the current terminal.
+
+The actual game binary is built as `dungeon_crawler_game`.
+
 ## Controls
 
 - `WASD` or arrow keys: Move

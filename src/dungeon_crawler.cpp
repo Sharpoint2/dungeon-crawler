@@ -1,4 +1,5 @@
 #include <iostream>
+#include "sdl_backend.h"
 #include <vector>
 #include <string>
 #include <memory>
@@ -6,9 +7,6 @@
 #include <chrono>
 #include <thread>
 #include <algorithm>
-#include <termios.h>
-#include <unistd.h>
-#include <fcntl.h>
 #include <cstdlib>
 #include <cmath>
 #include <sstream>
@@ -50,48 +48,6 @@ public:
         return getFloat(0.0f, 1.0f) < probability;
     }
 } g_random;
-
-// Terminal control
-void setColor(int color) {
-    std::cout << "\033[" << color << "m";
-}
-
-void resetColor() {
-    std::cout << "\033[0m";
-}
-
-void clearScreen() {
-    std::cout << "\033[2J\033[H";
-}
-
-void moveCursor(int x, int y) {
-    std::cout << "\033[" << y << ";" << x << "H";
-}
-
-void setupTerminal() {
-    struct termios t;
-    tcgetattr(STDIN_FILENO, &t);
-    t.c_lflag &= ~(ICANON | ECHO);
-    tcsetattr(STDIN_FILENO, TCSANOW, &t);
-    
-    int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
-    fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK);
-}
-
-void restoreTerminal() {
-    struct termios t;
-    tcgetattr(STDIN_FILENO, &t);
-    t.c_lflag |= ICANON | ECHO;
-    tcsetattr(STDIN_FILENO, TCSANOW, &t);
-}
-
-char getKeyPress() {
-    char key = 0;
-    if (std::cin.get(key)) {
-        return key;
-    }
-    return 0;
-}
 
 void sleepMs(int ms) {
     std::this_thread::sleep_for(std::chrono::milliseconds(ms));
@@ -390,7 +346,7 @@ public:
         for (int i = start; i < (int)messages.size(); i++) {
             moveCursor(1, y++);
             setColor(messages[i].second);
-            std::cout << messages[i].first;
+            termPrint( messages[i].first);
             resetColor();
         }
     }
@@ -398,34 +354,34 @@ public:
     void renderStatus(EntityPtr player) {
         moveCursor(1, 1);
         setColor(Color::BRIGHT_CYAN);
-        std::cout << "╔════════════════════════════════════════════════════════════════════════════╗";
+        termPrint( "╔════════════════════════════════════════════════════════════════════════════╗");
         
         moveCursor(1, 2);
-        std::cout << "║ ";
+        termPrint( "║ ");
         resetColor();
         
         // Player info
         setColor(Color::YELLOW);
-        std::cout << "HP: " << player->stats.hp << "/" << player->stats.maxHp;
+        termPrint( "HP: ", player->stats.hp, "/", player->stats.maxHp);
         resetColor();
-        std::cout << " | ";
+        termPrint( " | ");
         setColor(Color::BLUE);
-        std::cout << "MP: " << player->stats.mp << "/" << player->stats.maxMp;
+        termPrint( "MP: ", player->stats.mp, "/", player->stats.maxMp);
         resetColor();
-        std::cout << " | ";
+        termPrint( " | ");
         setColor(Color::GREEN);
-        std::cout << "LVL: " << player->stats.level;
+        termPrint( "LVL: ", player->stats.level);
         resetColor();
-        std::cout << " | ";
+        termPrint( " | ");
         setColor(Color::MAGENTA);
-        std::cout << "EXP: " << player->stats.exp << "/" << player->stats.expToNext;
+        termPrint( "EXP: ", player->stats.exp, "/", player->stats.expToNext);
         resetColor();
         
         setColor(Color::BRIGHT_CYAN);
-        std::cout << " ║";
+        termPrint( " ║");
         
         moveCursor(1, 3);
-        std::cout << "╚════════════════════════════════════════════════════════════════════════════╝";
+        termPrint( "╚════════════════════════════════════════════════════════════════════════════╝");
         resetColor();
     }
     
@@ -436,14 +392,14 @@ public:
                 const auto& cell = map.cells[x][y];
                 
                 if (!cell.explored) {
-                    std::cout << ' ';
+                    termPrint( ' ');
                     continue;
                 }
                 
                 if (!cell.visible) {
                     setColor(Color::BRIGHT_BLACK);
-                    if (cell.tile == TileType::WALL) std::cout << '#';
-                    else std::cout << '.';
+                    if (cell.tile == TileType::WALL) termPrint( '#');
+                    else termPrint( '.');
                     resetColor();
                     continue;
                 }
@@ -453,7 +409,7 @@ public:
                 for (auto& e : map.entities) {
                     if (e->x == x && e->y == y && !e->destroyed) {
                         setColor(e->color);
-                        std::cout << e->symbol;
+                        termPrint( e->symbol);
                         resetColor();
                         rendered = true;
                         break;
@@ -464,18 +420,18 @@ public:
                     switch(cell.tile) {
                         case TileType::WALL:
                             setColor(Color::WHITE);
-                            std::cout << '#';
+                            termPrint( '#');
                             break;
                         case TileType::FLOOR:
                             setColor(Color::BRIGHT_BLACK);
-                            std::cout << '.';
+                            termPrint( '.');
                             break;
                         case TileType::STAIRS_DOWN:
                             setColor(Color::YELLOW);
-                            std::cout << '>';
+                            termPrint( '>');
                             break;
                         default:
-                            std::cout << ' ';
+                            termPrint( ' ');
                     }
                     resetColor();
                 }
@@ -487,74 +443,74 @@ public:
         clearScreen();
         moveCursor(1, 10);
         setColor(Color::BRIGHT_CYAN);
-        std::cout << "╔════════════════════════════════════════════════════════════════════════════╗";
+        termPrint( "╔════════════════════════════════════════════════════════════════════════════╗");
         moveCursor(1, 11);
-        std::cout << "║                                                                            ║";
+        termPrint( "║                                                                            ║");
         moveCursor(1, 12);
-        std::cout << "║               DUNGEON CRAWLER - RogueLike Adventure                        ║";
+        termPrint( "║               DUNGEON CRAWLER - RogueLike Adventure                        ║");
         moveCursor(1, 13);
-        std::cout << "║                                                                            ║";
+        termPrint( "║                                                                            ║");
         moveCursor(1, 14);
-        std::cout << "╚════════════════════════════════════════════════════════════════════════════╝";
+        termPrint( "╚════════════════════════════════════════════════════════════════════════════╝");
         resetColor();
         
         moveCursor(30, 16);
-        std::cout << "1. New Game";
+        termPrint( "1. New Game");
         moveCursor(30, 17);
-        std::cout << "2. Help";
+        termPrint( "2. Help");
         moveCursor(30, 18);
-        std::cout << "3. Quit";
+        termPrint( "3. Quit");
         
         moveCursor(1, 24);
-        std::cout << "Use 1-3 to select, WASD/Arrows to move, Space to rest";
+        termPrint( "Use 1-3 to select, WASD/Arrows to move, Space to rest");
     }
     
     void showHelp() {
         clearScreen();
         setColor(Color::BRIGHT_YELLOW);
-        std::cout << "╔════════════════════════════════════════════════════════════════════════════╗";
+        termPrint( "╔════════════════════════════════════════════════════════════════════════════╗");
         moveCursor(1, 2);
-        std::cout << "║                             HELP SCREEN                                    ║";
+        termPrint( "║                             HELP SCREEN                                    ║");
         moveCursor(1, 3);
-        std::cout << "╚════════════════════════════════════════════════════════════════════════════╝";
+        termPrint( "╚════════════════════════════════════════════════════════════════════════════╝");
         resetColor();
         
         moveCursor(5, 5);
-        std::cout << "Movement:";
+        termPrint( "Movement:");
         moveCursor(5, 6);
-        std::cout << "  W/↑ - Move up";
+        termPrint( "  W/↑ - Move up");
         moveCursor(5, 7);
-        std::cout << "  S/↓ - Move down";
+        termPrint( "  S/↓ - Move down");
         moveCursor(5, 8);
-        std::cout << "  A/← - Move left";
+        termPrint( "  A/← - Move left");
         moveCursor(5, 9);
-        std::cout << "  D/→ - Move right";
+        termPrint( "  D/→ - Move right");
         
         moveCursor(5, 11);
-        std::cout << "Actions:";
+        termPrint( "Actions:");
         moveCursor(5, 12);
-        std::cout << "  Space - Rest (heal slowly)";
+        termPrint( "  Space - Rest (heal slowly)");
         moveCursor(5, 13);
-        std::cout << "  G - Pick up items";
+        termPrint( "  G - Pick up items");
         moveCursor(5, 14);
-        std::cout << "  > - Use stairs down";
+        termPrint( "  > - Use stairs down");
         
         moveCursor(5, 16);
-        std::cout << "Combat:";
+        termPrint( "Combat:");
         moveCursor(5, 17);
-        std::cout << "  Move into enemies to attack";
+        termPrint( "  Move into enemies to attack");
         moveCursor(5, 18);
-        std::cout << "  Different enemies have different strength";
+        termPrint( "  Different enemies have different strength");
         
         moveCursor(5, 20);
-        std::cout << "Goal:";
+        termPrint( "Goal:");
         moveCursor(5, 21);
-        std::cout << "  Descend all dungeon levels (25 floors)";
+        termPrint( "  Descend all dungeon levels (25 floors)");
         moveCursor(5, 22);
-        std::cout << "  Find the Amulet of Yendor on floor 25!";
+        termPrint( "  Find the Amulet of Yendor on floor 25!");
         
         moveCursor(30, 24);
-        std::cout << "Press any key to continue...";
+        termPrint( "Press any key to continue...");
     }
 };
 
@@ -596,6 +552,7 @@ public:
     
     void runMenu() {
         ui.showMainMenu();
+        refreshScreen();
         
         char key = 0;
         while (key == 0) {
@@ -614,6 +571,7 @@ public:
     
     void runHelp() {
         ui.showHelp();
+        refreshScreen();
         
         char key = 0;
         while (key == 0) {
@@ -649,6 +607,7 @@ public:
         ui.renderStatus(player);
         ui.renderMap(*map, player);
         ui.renderMessages();
+        refreshScreen();
         
         // Handle input
         char key = getKeyPress();
@@ -689,6 +648,9 @@ public:
                 return;
             case '?':
                 state = State::HELP;
+                return;
+            case 'q': case 'Q':
+                state = State::DEFEAT;
                 return;
             default: return;
         }
@@ -852,34 +814,35 @@ public:
         if (state == State::VICTORY) {
             setColor(Color::BRIGHT_YELLOW);
             moveCursor(30, 10);
-            std::cout << "╔════════════════════════════╗";
+            termPrint( "╔════════════════════════════╗");
             moveCursor(30, 11);
-            std::cout << "║   VICTORY! YOU ESCAPED!    ║";
+            termPrint( "║   VICTORY! YOU ESCAPED!    ║");
             moveCursor(30, 12);
-            std::cout << "╚════════════════════════════╝";
+            termPrint( "╚════════════════════════════╝");
             resetColor();
             
             moveCursor(25, 14);
-            std::cout << "You found the Amulet of Yendor and escaped the dungeon!";
+            termPrint( "You found the Amulet of Yendor and escaped the dungeon!");
         } else {
             setColor(Color::BRIGHT_RED);
             moveCursor(30, 10);
-            std::cout << "╔════════════════════════════╗";
+            termPrint( "╔════════════════════════════╗");
             moveCursor(30, 11);
-            std::cout << "║        GAME OVER           ║";
+            termPrint( "║        GAME OVER           ║");
             moveCursor(30, 12);
-            std::cout << "╚════════════════════════════╝";
+            termPrint( "╚════════════════════════════╝");
             resetColor();
             
             moveCursor(30, 14);
-            std::cout << "You died on level " << dungeonLevel;
+            termPrint( "You died on level ", dungeonLevel);
         }
         
         moveCursor(25, 20);
-        std::cout << "Final Score: " << (player->stats.level * 100 + dungeonLevel * 50);
+        termPrint( "Final Score: ", (player->stats.level * 100 + dungeonLevel * 50));
         
         moveCursor(30, 24);
-        std::cout << "Press any key to exit...";
+        termPrint( "Press any key to exit...");
+        refreshScreen();
         
         while (getKeyPress() == 0) {
             sleepMs(50);
